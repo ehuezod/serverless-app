@@ -1,6 +1,6 @@
 import * as cdk from 'aws-cdk-lib/core';
 import {Construct} from 'constructs';
-import {aws_dynamodb, aws_s3, aws_lambda, aws_lambda_nodejs} from "aws-cdk-lib";
+import {aws_dynamodb, aws_s3, aws_lambda, aws_lambda_nodejs, aws_apigateway} from "aws-cdk-lib";
 import {BillingMode} from "aws-cdk-lib/aws-dynamodb";
 
 // import * as sqs from 'aws-cdk-lib/aws-sqs';
@@ -35,5 +35,15 @@ export class ServerlessAppStack extends cdk.Stack {
         BUCKET_NAME: s3Bucket.bucketName,
       },
     });
+
+    s3Bucket.grantPut(getUploadUrlFn);
+
+    const api = new aws_apigateway.RestApi(this, 'TransactionApi', {
+      restApiName: 'Transaction Analyzer API',
+    });
+
+    const uploadResource = api.root.addResource('upload-url');
+    uploadResource.addMethod('POST', new aws_apigateway.LambdaIntegration(getUploadUrlFn));
+
   }
 }
