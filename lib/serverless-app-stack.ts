@@ -29,13 +29,14 @@ export class ServerlessAppStack extends cdk.Stack {
 
     const getUploadUrlFn = new aws_lambda_nodejs.NodejsFunction(this, 'GetUploadUrlFn', {
       runtime: aws_lambda.Runtime.NODEJS_20_X,
-      entry: 'lambda/get-upload-url/index.ts',   // points straight at your TS source
-      handler: 'handler',                          // name of the exported function inside that file
+      entry: 'lambda/get-upload-url/index.ts',
+      handler: 'handler',
       environment: {
         BUCKET_NAME: s3Bucket.bucketName,
       },
     });
 
+    s3Bucket.grantPut(getUploadUrlFn);
     s3Bucket.grantPut(getUploadUrlFn);
 
     const api = new aws_apigateway.RestApi(this, 'TransactionApi', {

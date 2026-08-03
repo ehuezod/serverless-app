@@ -8,7 +8,7 @@ export const handler = async (event: any) => {
     try {
         const body = event.body ? JSON.parse(event.body) : {};
         const fileName = body.fileName || `upload-${randomUUID()}.csv`;
-        const userId = body.userId; // you'll want real auth-derived userId eventually, not client-supplied
+        const userId = body.userId;
 
         if (!userId) {
             return {
