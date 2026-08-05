@@ -28,7 +28,7 @@ export class ServerlessAppStack extends cdk.Stack {
     })
 
     const getUploadUrlFn = new aws_lambda_nodejs.NodejsFunction(this, 'GetUploadUrlFn', {
-      runtime: aws_lambda.Runtime.NODEJS_20_X,
+      runtime: aws_lambda.Runtime.NODEJS_22_X,
       entry: 'lambda/get-upload-url/index.ts',
       handler: 'handler',
       environment: {
