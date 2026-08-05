@@ -24,7 +24,15 @@ describe('buildSummaryItem', () => {
         transactionCount: 10,
         skippedRowCount: 1,
         errors: [{ row: 5, reason: 'bad amount' }],
-        summaries: [{ category: 'All Transactions', totalSpend: 100, transactionCount: 9 }],
+        summaries: [
+            {
+                category: 'All Spend',
+                totalSpend: 100,
+                transactionCount: 9,
+                uniqueEmployeeCount: 3,
+                transactions: [],
+            },
+        ],
     };
 
     test('assembles the sk and passes fields through', () => {

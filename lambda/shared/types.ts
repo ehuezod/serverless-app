@@ -24,6 +24,8 @@ export interface CategorySummary {
     category: string;
     totalSpend: number;
     transactionCount: number;
+    uniqueEmployeeCount: number;
+    transactions: Transaction[];
 }
 
 export interface SummaryItem {
