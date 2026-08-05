@@ -1,6 +1,7 @@
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { randomUUID } from "crypto";
+import { buildUploadKey } from "../shared/s3-key";
 
 const s3 = new S3Client({});
 
@@ -17,7 +18,7 @@ export const handler = async (event: any) => {
             };
         }
 
-        const key = `uploads/${userId}/${randomUUID()}-${fileName}`;
+        const { key } = buildUploadKey(userId, fileName, randomUUID());
 
         const command = new PutObjectCommand({
             Bucket: process.env.BUCKET_NAME,
