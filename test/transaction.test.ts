@@ -23,6 +23,18 @@ describe('parseAmountToCents', () => {
         expect(parseAmountToCents('')).toBeNull();
         expect(parseAmountToCents(undefined as unknown as string)).toBeNull();
     });
+
+    test('parses a dollar-sign-prefixed amount', () => {
+        expect(parseAmountToCents('$301.65')).toBe(30165);
+    });
+
+    test('parses a negative dollar-sign-prefixed amount (sign before $)', () => {
+        expect(parseAmountToCents('-$272.19')).toBe(-27219);
+    });
+
+    test('parses a dollar amount with comma thousands separators', () => {
+        expect(parseAmountToCents('$1,270.69')).toBe(127069);
+    });
 });
 
 describe('validateRow', () => {
@@ -84,6 +96,23 @@ describe('validateRow', () => {
         expect(result.ok).toBe(false);
         if (!result.ok) {
             expect(result.error.reason).toMatch(/transactionDate/);
+        }
+    });
+
+    test('accepts and normalizes a MM/DD/YY date', () => {
+        const result = validateRow({ ...validRaw, transactionDate: '08/21/23' }, 5);
+        expect(result.ok).toBe(true);
+        if (result.ok) {
+            expect(result.transaction.transactionDate).toBe('2023-08-21');
+        }
+    });
+
+    test('matches a "Merchant Name" header (with a space) to merchantName', () => {
+        const { merchantName, ...rest } = validRaw;
+        const result = validateRow({ ...rest, 'Merchant Name': 'Starbucks' } as any, 6);
+        expect(result.ok).toBe(true);
+        if (result.ok) {
+            expect(result.transaction.merchantName).toBe('Starbucks');
         }
     });
 
