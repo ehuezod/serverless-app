@@ -5,6 +5,11 @@ import { buildUploadKey } from "../shared/s3-key";
 
 const s3 = new S3Client({});
 
+// API Gateway's auto-generated OPTIONS mock only covers the preflight;
+// the actual Lambda response still needs this header on every path or
+// browsers reject the response after a successful preflight.
+const CORS_HEADERS = { "Access-Control-Allow-Origin": "*" };
+
 export const handler = async (event: any) => {
     try {
         const body = event.body ? JSON.parse(event.body) : {};
@@ -14,6 +19,7 @@ export const handler = async (event: any) => {
         if (!userId) {
             return {
                 statusCode: 400,
+                headers: CORS_HEADERS,
                 body: JSON.stringify({ error: "userId is required" }),
             };
         }
@@ -30,12 +36,14 @@ export const handler = async (event: any) => {
 
         return {
             statusCode: 200,
+            headers: CORS_HEADERS,
             body: JSON.stringify({ uploadUrl, key }),
         };
     } catch (err) {
         console.error("Error generating upload URL:", err);
         return {
             statusCode: 500,
+            headers: CORS_HEADERS,
             body: JSON.stringify({ error: "Failed to generate upload URL" }),
         };
     }

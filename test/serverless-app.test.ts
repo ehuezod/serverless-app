@@ -60,3 +60,96 @@ test('GET /summaries/{userId} route exists', () => {
         Integration: Match.objectLike({ Type: 'AWS_PROXY' }),
     });
 });
+
+test('API Gateway has a CORS preflight OPTIONS method', () => {
+    const template = synthTemplate();
+    template.hasResourceProperties('AWS::ApiGateway::Method', {
+        HttpMethod: 'OPTIONS',
+    });
+});
+
+test('a second, private S3 bucket is created for the static site', () => {
+    const template = synthTemplate();
+    template.resourceCountIs('AWS::S3::Bucket', 2);
+    template.hasResourceProperties('AWS::S3::Bucket', {
+        PublicAccessBlockConfiguration: {
+            BlockPublicAcls: true,
+            BlockPublicPolicy: true,
+            IgnorePublicAcls: true,
+            RestrictPublicBuckets: true,
+        },
+    });
+});
+
+test('CloudFront distribution is created', () => {
+    const template = synthTemplate();
+    template.resourceCountIs('AWS::CloudFront::Distribution', 1);
+    template.resourceCountIs('AWS::CloudFront::Function', 0);
+});
+
+test('static site assets are deployed via a BucketDeployment custom resource', () => {
+    const template = synthTemplate();
+    template.resourceCountIs('Custom::CDKBucketDeployment', 1);
+});
+
+test('a REGIONAL WAFv2 WebACL is created with managed rule groups enforced and a per-IP rate limit', () => {
+    const template = synthTemplate();
+    template.resourceCountIs('AWS::WAFv2::WebACL', 1);
+    template.hasResourceProperties('AWS::WAFv2::WebACL', {
+        Scope: 'REGIONAL',
+        DefaultAction: { Allow: {} },
+        Rules: Match.arrayWith([
+            Match.objectLike({
+                Statement: Match.objectLike({
+                    ManagedRuleGroupStatement: Match.objectLike({
+                        VendorName: 'AWS',
+                        Name: 'AWSManagedRulesCommonRuleSet',
+                    }),
+                }),
+                OverrideAction: { None: {} },
+            }),
+            Match.objectLike({
+                Statement: Match.objectLike({
+                    ManagedRuleGroupStatement: Match.objectLike({
+                        VendorName: 'AWS',
+                        Name: 'AWSManagedRulesKnownBadInputsRuleSet',
+                    }),
+                }),
+                OverrideAction: { None: {} },
+            }),
+            Match.objectLike({
+                Statement: Match.objectLike({
+                    RateBasedStatement: Match.objectLike({
+                        AggregateKeyType: 'IP',
+                        Limit: 500,
+                    }),
+                }),
+                Action: { Block: {} },
+            }),
+        ]),
+    });
+});
+
+test('the WAFv2 WebACL is associated with the API Gateway stage', () => {
+    const template = synthTemplate();
+    template.resourceCountIs('AWS::WAFv2::WebACLAssociation', 1);
+    template.hasResourceProperties('AWS::WAFv2::WebACLAssociation', {
+        WebACLArn: Match.objectLike({
+            'Fn::GetAtt': Match.arrayWith([Match.stringLikeRegexp('ApiWebAcl.*')]),
+        }),
+    });
+});
+
+test('API Gateway stage has throttling configured', () => {
+    const template = synthTemplate();
+    template.hasResourceProperties('AWS::ApiGateway::Stage', {
+        MethodSettings: Match.arrayWith([
+            Match.objectLike({
+                ResourcePath: '/*',
+                HttpMethod: '*',
+                ThrottlingRateLimit: 10,
+                ThrottlingBurstLimit: 20,
+            }),
+        ]),
+    });
+});

@@ -1,6 +1,18 @@
+import * as path from 'path';
 import * as cdk from 'aws-cdk-lib/core';
 import {Construct} from 'constructs';
-import {aws_dynamodb, aws_s3, aws_s3_notifications, aws_lambda, aws_lambda_nodejs, aws_apigateway} from "aws-cdk-lib";
+import {
+    aws_dynamodb,
+    aws_s3,
+    aws_s3_deployment,
+    aws_s3_notifications,
+    aws_lambda,
+    aws_lambda_nodejs,
+    aws_apigateway,
+    aws_cloudfront,
+    aws_cloudfront_origins,
+    aws_wafv2,
+} from "aws-cdk-lib";
 import {BillingMode} from "aws-cdk-lib/aws-dynamodb";
 
 // import * as sqs from 'aws-cdk-lib/aws-sqs';
@@ -24,7 +36,20 @@ export class ServerlessAppStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.RETAIN,
       lifecycleRules: [
         {expiration: cdk.Duration.days(30)}
-      ]
+      ],
+      // The browser PUTs the CSV directly to a presigned URL on this bucket.
+      // Origin is left as '*' (rather than the CloudFront site domain) to
+      // avoid a circular CDK dependency between this bucket and the
+      // Distribution below; the bucket itself still blocks all public access
+      // and requires a valid presigned signature, so this only affects
+      // browser-enforced cross-origin behavior, not who can write to it.
+      cors: [
+        {
+          allowedMethods: [aws_s3.HttpMethods.PUT],
+          allowedOrigins: ['*'],
+          allowedHeaders: ['Content-Type'],
+        },
+      ],
     })
 
     const getUploadUrlFn = new aws_lambda_nodejs.NodejsFunction(this, 'GetUploadUrlFn', {
@@ -73,6 +98,21 @@ export class ServerlessAppStack extends cdk.Stack {
 
     const api = new aws_apigateway.RestApi(this, 'TransactionApi', {
       restApiName: 'Transaction Analyzer API',
+      // The frontend is a browser SPA calling this API cross-origin. Wide open
+      // (matching the S3 CORS choice above, for the same circular-dependency
+      // reason) is an acceptable simplification since the API has no auth of
+      // its own regardless of which origin calls it.
+      defaultCorsPreflightOptions: {
+        allowOrigins: aws_apigateway.Cors.ALL_ORIGINS,
+        allowMethods: ['GET', 'POST', 'OPTIONS'],
+        allowHeaders: ['Content-Type'],
+      },
+      // Stage-wide default: caps runaway/scripted traffic without gating
+      // access (no usage plan/API key) — the API remains fully open.
+      deployOptions: {
+        throttlingRateLimit: 10,
+        throttlingBurstLimit: 20,
+      },
     });
 
     const uploadResource = api.root.addResource('upload-url');
@@ -81,5 +121,153 @@ export class ServerlessAppStack extends cdk.Stack {
     const summariesResource = api.root.addResource('summaries').addResource('{userId}');
     summariesResource.addMethod('GET', new aws_apigateway.LambdaIntegration(getSummariesFn));
 
+    // ---- WAF: blunts scripted abuse/DoS against the (intentionally
+    // unauthenticated) API. REGIONAL scope has no region constraint (unlike
+    // CLOUDFRONT scope, which would require pinning this stack to
+    // us-east-1), so the stack stays environment-agnostic.
+    const apiWebAcl = new aws_wafv2.CfnWebACL(this, 'ApiWebAcl', {
+      defaultAction: { allow: {} },
+      scope: 'REGIONAL',
+      visibilityConfig: {
+        cloudWatchMetricsEnabled: true,
+        metricName: 'ApiWebAclMetric',
+        sampledRequestsEnabled: true,
+      },
+      rules: [
+        {
+          name: 'AWS-AWSManagedRulesCommonRuleSet',
+          priority: 0,
+          overrideAction: { none: {} },
+          statement: {
+            managedRuleGroupStatement: {
+              vendorName: 'AWS',
+              name: 'AWSManagedRulesCommonRuleSet',
+            },
+          },
+          visibilityConfig: {
+            cloudWatchMetricsEnabled: true,
+            metricName: 'CommonRuleSet',
+            sampledRequestsEnabled: true,
+          },
+        },
+        {
+          name: 'AWS-AWSManagedRulesKnownBadInputsRuleSet',
+          priority: 1,
+          overrideAction: { none: {} },
+          statement: {
+            managedRuleGroupStatement: {
+              vendorName: 'AWS',
+              name: 'AWSManagedRulesKnownBadInputsRuleSet',
+            },
+          },
+          visibilityConfig: {
+            cloudWatchMetricsEnabled: true,
+            metricName: 'KnownBadInputsRuleSet',
+            sampledRequestsEnabled: true,
+          },
+        },
+        {
+          name: 'RateLimitPerIp',
+          priority: 2,
+          action: { block: {} },
+          statement: {
+            rateBasedStatement: {
+              limit: 500,
+              aggregateKeyType: 'IP',
+              evaluationWindowSec: 300,
+            },
+          },
+          visibilityConfig: {
+            cloudWatchMetricsEnabled: true,
+            metricName: 'RateLimitPerIp',
+            sampledRequestsEnabled: true,
+          },
+        },
+      ],
+    });
+
+    new aws_wafv2.CfnWebACLAssociation(this, 'ApiWebAclAssociation', {
+      resourceArn: api.deploymentStage.stageArn,
+      webAclArn: apiWebAcl.attrArn,
+    });
+
+    // ---- Static frontend hosting (CloudFront + private S3 origin) ----
+
+    const siteBucket = new aws_s3.Bucket(this, 'SiteBucket', {
+      encryption: aws_s3.BucketEncryption.S3_MANAGED,
+      blockPublicAccess: aws_s3.BlockPublicAccess.BLOCK_ALL,
+      enforceSSL: true,
+      removalPolicy: cdk.RemovalPolicy.RETAIN,
+    });
+
+    const responseHeadersPolicy = new aws_cloudfront.ResponseHeadersPolicy(this, 'SiteResponseHeadersPolicy', {
+      securityHeadersBehavior: {
+        contentSecurityPolicy: {
+          // connect-src must include the API's real invoke URL (for
+          // /upload-url and /summaries calls) AND the uploads bucket's
+          // regional domain (the SPA PUTs the CSV directly to a presigned
+          // S3 URL after calling the API) — missing either one gets
+          // silently blocked by CSP with no useful error from fetch().
+          contentSecurityPolicy: `default-src 'self'; connect-src 'self' ${api.url} https://${s3Bucket.bucketRegionalDomainName}; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'self'`,
+          override: true,
+        },
+        strictTransportSecurity: {
+          accessControlMaxAge: cdk.Duration.days(365),
+          includeSubdomains: true,
+          preload: true,
+          override: true,
+        },
+        contentTypeOptions: { override: true },
+        referrerPolicy: {
+          referrerPolicy: aws_cloudfront.HeadersReferrerPolicy.SAME_ORIGIN,
+          override: true,
+        },
+        frameOptions: {
+          frameOption: aws_cloudfront.HeadersFrameOption.DENY,
+          override: true,
+        },
+        xssProtection: {
+          protection: true,
+          modeBlock: true,
+          override: true,
+        },
+      },
+    });
+
+    const distribution = new aws_cloudfront.Distribution(this, 'SiteDistribution', {
+      defaultRootObject: 'index.html',
+      defaultBehavior: {
+        origin: aws_cloudfront_origins.S3BucketOrigin.withOriginAccessControl(siteBucket),
+        viewerProtocolPolicy: aws_cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+        responseHeadersPolicy,
+      },
+      errorResponses: [
+        { httpStatus: 403, responseHttpStatus: 200, responsePagePath: '/index.html' },
+        { httpStatus: 404, responseHttpStatus: 200, responsePagePath: '/index.html' },
+      ],
+    });
+
+    // frontend/dist must be built (npm --prefix frontend run build) before
+    // `cdk synth`/`cdk deploy` — CDK packages whatever is on disk here, it
+    // does not invoke Vite itself.
+    new aws_s3_deployment.BucketDeployment(this, 'DeploySite', {
+      sources: [
+        aws_s3_deployment.Source.asset(path.join(__dirname, '../frontend/dist')),
+        // Lets the SPA learn the API base URL at runtime (fetched as
+        // /config.json on load) without hardcoding it into the JS bundle.
+        aws_s3_deployment.Source.jsonData('config.json', { apiUrl: api.url }),
+      ],
+      destinationBucket: siteBucket,
+      distribution,
+      distributionPaths: ['/*'],
+      // Uniform no-cache keeps every deploy immediately visible (this is a
+      // small, low-traffic app — trading long-lived asset caching for
+      // simplicity and never serving stale content is the right tradeoff
+      // here) alongside the CloudFront invalidation above.
+      cacheControl: [aws_s3_deployment.CacheControl.noCache()],
+    });
+
+    new cdk.CfnOutput(this, 'ApiUrl', { value: api.url });
+    new cdk.CfnOutput(this, 'DistributionDomainName', { value: distribution.distributionDomainName });
   }
 }

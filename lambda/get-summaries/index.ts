@@ -7,6 +7,11 @@ const ddbDocClient = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 100;
 
+// API Gateway's auto-generated OPTIONS mock only covers the preflight;
+// the actual Lambda response still needs this header on every path or
+// browsers reject the response after a successful preflight.
+const CORS_HEADERS = { 'Access-Control-Allow-Origin': '*' };
+
 function decodeNextToken(token: string | undefined): Record<string, unknown> | undefined {
     if (!token) return undefined;
     try {
@@ -24,7 +29,7 @@ function encodeNextToken(key: Record<string, unknown> | undefined): string | und
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
     const userId = event.pathParameters?.userId;
     if (!userId) {
-        return { statusCode: 400, body: JSON.stringify({ error: 'userId is required' }) };
+        return { statusCode: 400, headers: CORS_HEADERS, body: JSON.stringify({ error: 'userId is required' }) };
     }
 
     const rawLimit = Number(event.queryStringParameters?.limit);
@@ -48,6 +53,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
         return {
             statusCode: 200,
+            headers: CORS_HEADERS,
             body: JSON.stringify({
                 userId,
                 uploads: result.Items ?? [],
@@ -56,6 +62,6 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         };
     } catch (err) {
         console.error('Error querying summaries:', err);
-        return { statusCode: 500, body: JSON.stringify({ error: 'Failed to fetch summaries' }) };
+        return { statusCode: 500, headers: CORS_HEADERS, body: JSON.stringify({ error: 'Failed to fetch summaries' }) };
     }
 };
