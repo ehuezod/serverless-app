@@ -2,12 +2,7 @@ import { Bar, BarChart, CartesianGrid, LabelList, ResponsiveContainer, Tooltip, 
 import type { TooltipContentProps, TooltipValueType } from 'recharts';
 import type { CategorySummary } from '../lib/types';
 import { formatDollars } from '../lib/format';
-
-// "All Spend" and "Relevant Spend" are near-total supersets of the other
-// categories (see lambda/shared/category-rules.ts) — charting them alongside
-// the granular categories would dwarf every other bar. They're surfaced as
-// stat tiles above this chart instead (see ResultsScreen).
-const EXCLUDED_FROM_CHART = new Set(['All Spend', 'Relevant Spend']);
+import { EXCLUDED_FROM_CHART } from '../lib/constants';
 
 interface CategorySpendChartProps {
     summaries: CategorySummary[];

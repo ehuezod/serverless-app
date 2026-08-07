@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatCents, formatDollars } from './format';
+import { formatCents, formatCount, formatDollars } from './format';
 
 describe('formatCents', () => {
     it('divides by 100 before formatting', () => {
@@ -26,5 +26,19 @@ describe('formatDollars', () => {
 
     it('handles zero', () => {
         expect(formatDollars(0)).toBe('$0.00');
+    });
+});
+
+describe('formatCount', () => {
+    it('formats a plain integer', () => {
+        expect(formatCount(7)).toBe('7');
+    });
+
+    it('adds thousands separators', () => {
+        expect(formatCount(12345)).toBe('12,345');
+    });
+
+    it('handles zero', () => {
+        expect(formatCount(0)).toBe('0');
     });
 });

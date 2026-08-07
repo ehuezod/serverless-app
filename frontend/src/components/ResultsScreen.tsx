@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import type { SummaryItem } from '../lib/types';
-import { formatDollars } from '../lib/format';
+import { formatCount, formatDollars } from '../lib/format';
+import { EXCLUDED_FROM_CHART } from '../lib/constants';
 import { StatTile } from './StatTile';
 import { CategorySpendChart } from './CategorySpendChart';
-import { TopSpendTable } from './TopSpendTable';
+import { CategoryCard } from './CategoryCard';
 
 interface ResultsScreenProps {
     summary: SummaryItem;
@@ -15,7 +16,10 @@ export function ResultsScreen({ summary, onUploadAnother }: ResultsScreenProps) 
 
     const allSpend = summary.summaries.find((s) => s.category === 'All Spend');
     const relevantSpend = summary.summaries.find((s) => s.category === 'Relevant Spend');
-    const topSpendLines = allSpend?.transactions ?? [];
+    const categoryCards = summary.summaries
+        .filter((s) => !EXCLUDED_FROM_CHART.has(s.category))
+        .slice()
+        .sort((a, b) => b.totalSpend - a.totalSpend);
 
     return (
         <div>
@@ -42,8 +46,22 @@ export function ResultsScreen({ summary, onUploadAnother }: ResultsScreenProps) 
             </div>
 
             <div className="stat-row">
-                <StatTile label="All spend" value={formatDollars(allSpend?.totalSpend ?? 0)} />
-                <StatTile label="Relevant spend" value={formatDollars(relevantSpend?.totalSpend ?? 0)} />
+                <StatTile
+                    label="All spend"
+                    value={formatDollars(allSpend?.totalSpend ?? 0)}
+                    metrics={[
+                        { label: 'Transactions', value: formatCount(allSpend?.transactionCount ?? 0) },
+                        { label: 'Cardholders', value: formatCount(allSpend?.uniqueEmployeeCount ?? 0) },
+                    ]}
+                />
+                <StatTile
+                    label="Relevant spend"
+                    value={formatDollars(relevantSpend?.totalSpend ?? 0)}
+                    metrics={[
+                        { label: 'Transactions', value: formatCount(relevantSpend?.transactionCount ?? 0) },
+                        { label: 'Cardholders', value: formatCount(relevantSpend?.uniqueEmployeeCount ?? 0) },
+                    ]}
+                />
             </div>
 
             <div className="card chart-card">
@@ -51,9 +69,10 @@ export function ResultsScreen({ summary, onUploadAnother }: ResultsScreenProps) 
                 <CategorySpendChart summaries={summary.summaries} />
             </div>
 
-            <div className="card">
-                <p className="section-title">Top spend lines</p>
-                <TopSpendTable transactions={topSpendLines} />
+            <div className="category-cards">
+                {categoryCards.map((s) => (
+                    <CategoryCard key={s.category} summary={s} />
+                ))}
             </div>
 
             <button className="secondary" style={{ marginTop: 20 }} onClick={onUploadAnother}>

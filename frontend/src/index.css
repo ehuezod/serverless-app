@@ -183,8 +183,102 @@ button.secondary {
     color: var(--text-primary);
 }
 
+.stat-tile-metrics {
+    display: flex;
+    gap: 16px;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--gridline);
+}
+
+.stat-tile-metric {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.stat-tile-metric-label {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+}
+
+.stat-tile-metric-value {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
 .chart-card {
     margin-bottom: 24px;
+}
+
+.category-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 24px;
+}
+
+.category-card {
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px 20px;
+}
+
+.category-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    background: none;
+    border: none;
+    padding: 0;
+    margin: 0;
+    cursor: pointer;
+    color: var(--text-primary);
+    font: inherit;
+    text-align: left;
+}
+
+.category-card-title {
+    font-size: 0.95rem;
+    font-weight: 600;
+}
+
+.category-card-chevron {
+    color: var(--text-muted);
+    font-size: 0.8rem;
+}
+
+.category-card-metrics {
+    display: flex;
+    gap: 24px;
+    margin-top: 12px;
+    flex-wrap: wrap;
+}
+
+.category-card-metric {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.category-card-metric-label {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+}
+
+.category-card-metric-value {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.category-card-body {
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid var(--gridline);
 }
 
 .table-wrapper {
