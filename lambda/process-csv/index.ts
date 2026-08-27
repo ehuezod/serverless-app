@@ -8,6 +8,7 @@ import { validateRow } from '../shared/transaction';
 import { aggregate } from '../shared/aggregate';
 import { buildSummaryItem } from '../shared/build-summary-item';
 import { CATEGORY_RULES } from '../shared/category-rules';
+import { generateQuickAnalysis } from '../shared/bedrock-analysis';
 import { RowError, Transaction } from '../shared/types';
 
 const s3 = new S3Client({});
@@ -42,6 +43,7 @@ async function processRecord(record: S3EventRecord): Promise<void> {
 
     const summaries = aggregate(transactions, CATEGORY_RULES);
     const processedAt = new Date().toISOString();
+    const analysis = await generateQuickAnalysis(summaries);
 
     const item = buildSummaryItem({
         userId,
@@ -53,6 +55,7 @@ async function processRecord(record: S3EventRecord): Promise<void> {
         skippedRowCount: errors.length,
         errors,
         summaries,
+        analysis,
     });
 
     await ddbDocClient.send(new PutCommand({ TableName: process.env.TABLE_NAME, Item: item }));

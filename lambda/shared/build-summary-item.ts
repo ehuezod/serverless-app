@@ -16,6 +16,7 @@ export function buildSummaryItem(args: {
     skippedRowCount: number;
     errors: RowError[];
     summaries: CategorySummary[];
+    analysis?: string;
 }): SummaryItem {
     return {
         userId: args.userId,
@@ -28,5 +29,6 @@ export function buildSummaryItem(args: {
         skippedRowCount: args.skippedRowCount,
         errors: args.errors.slice(0, MAX_ERRORS),
         summaries: args.summaries,
+        ...(args.analysis !== undefined && { analysis: args.analysis }),
     };
 }

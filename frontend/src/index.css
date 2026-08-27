@@ -281,6 +281,28 @@ button.secondary {
     border-top: 1px solid var(--gridline);
 }
 
+.quick-analysis-card {
+    margin-bottom: 24px;
+}
+
+.quick-analysis-badge {
+    display: inline-block;
+    background: var(--series-1);
+    color: #ffffff;
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    border-radius: 999px;
+    padding: 4px 10px;
+    margin-bottom: 12px;
+}
+
+.quick-analysis-text {
+    margin: 0;
+    color: var(--text-secondary);
+    line-height: 1.5;
+}
+
 .table-wrapper {
     overflow-x: auto;
 }

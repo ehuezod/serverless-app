@@ -35,6 +35,7 @@ export interface SummaryItem {
     skippedRowCount: number;
     errors: RowError[];
     summaries: CategorySummary[];
+    analysis?: string;
 }
 
 export interface SummariesResponse {

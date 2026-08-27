@@ -5,6 +5,7 @@ import { EXCLUDED_FROM_CHART } from '../lib/constants';
 import { StatTile } from './StatTile';
 import { CategorySpendChart } from './CategorySpendChart';
 import { CategoryCard } from './CategoryCard';
+import { QuickAnalysisCard } from './QuickAnalysisCard';
 
 interface ResultsScreenProps {
     summary: SummaryItem;
@@ -74,6 +75,8 @@ export function ResultsScreen({ summary, onUploadAnother }: ResultsScreenProps) 
                     <CategoryCard key={s.category} summary={s} />
                 ))}
             </div>
+
+            <QuickAnalysisCard analysis={summary.analysis} />
 
             <button className="secondary" style={{ marginTop: 20 }} onClick={onUploadAnother}>
                 Upload another file

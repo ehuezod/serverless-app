@@ -12,6 +12,7 @@ import {
     aws_cloudfront,
     aws_cloudfront_origins,
     aws_wafv2,
+    aws_iam,
 } from "aws-cdk-lib";
 import {BillingMode} from "aws-cdk-lib/aws-dynamodb";
 
@@ -64,19 +65,42 @@ export class ServerlessAppStack extends cdk.Stack {
     s3Bucket.grantPut(getUploadUrlFn);
 
     //processes an uploaded CSV into category summaries and writes the result to DynamoDB
+    // Nova Micro only supports invocation via a cross-region inference
+    // profile (not a direct on-demand model ID) — see bedrockFoundationModelId below.
+    const bedrockFoundationModelId = 'amazon.nova-micro-v1:0';
+    const bedrockInferenceProfileId = `us.${bedrockFoundationModelId}`;
+    const stackRegion = cdk.Stack.of(this).region;
+    const stackAccount = cdk.Stack.of(this).account;
+
     const processCsvFn = new aws_lambda_nodejs.NodejsFunction(this, 'ProcessCsvFn', {
       runtime: aws_lambda.Runtime.NODEJS_22_X,
       entry: 'lambda/process-csv/index.ts',
       handler: 'handler',
-      timeout: cdk.Duration.seconds(30),
+      // 30s base for CSV parsing + headroom for the synchronous Bedrock
+      // call (generateQuickAnalysis) added on top of it.
+      timeout: cdk.Duration.seconds(60),
       memorySize: 512,
       environment: {
         TABLE_NAME: table.tableName,
+        BEDROCK_MODEL_ID: bedrockInferenceProfileId,
       },
     });
 
     s3Bucket.grantRead(processCsvFn);
     table.grantWriteData(processCsvFn);
+
+    // Lets process-csv call Bedrock to generate the "quick analysis" sales
+    // pitch. No CDK grant* helper exists for Bedrock, so this is an explicit
+    // policy statement. Cross-region inference profiles require permission on
+    // both the profile resource itself AND the underlying foundation model
+    // (the profile can route the request to any US region under the hood).
+    processCsvFn.addToRolePolicy(new aws_iam.PolicyStatement({
+      actions: ['bedrock:InvokeModel'],
+      resources: [
+        `arn:aws:bedrock:${stackRegion}:${stackAccount}:inference-profile/${bedrockInferenceProfileId}`,
+        `arn:aws:bedrock:*::foundation-model/${bedrockFoundationModelId}`,
+      ],
+    }));
 
     s3Bucket.addEventNotification(
       aws_s3.EventType.OBJECT_CREATED,
